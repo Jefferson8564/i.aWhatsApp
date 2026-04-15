@@ -491,8 +491,9 @@ async function cancelarPedidoAnterior(pedidoId) {
 }
 
 // ── LER PRODUTOS DA URL ───────────────────────────────────────
-// Suporta: ?fritos=10+Frango=10+Catupiry&crus=5+Queijo
-// ou:      ?fritos=10+Frango=10+Catupiry=10+charque (tudo junto)
+// Mesma lógica do processarURLParams() do clientes.html
+// Suporta: ?fritos=10+Frango=10+Catupiry=10+charque?crus=5+Queijo
+// ou:      ?fritos=10+Frango=10+Catupiry=10+charque=10+enroladinho=10+queijo
 function lerItensURL() {
     function norm(n) {
         return n.toLowerCase()
@@ -500,23 +501,24 @@ function lerItensURL() {
             .replace(/\./g, '').replace(/\s+/g, ' ').trim();
     }
 
+    let itens = [];
     const fullHref = decodeURIComponent(window.location.href).replace(/\+/g, ' ');
-    const itens = [];
-
-    // Divide nos segmentos de query (?param=valor)
     const segmentos = fullHref.split('?').slice(1);
+    let encontrouFormato = false;
+
     segmentos.forEach(seg => {
-        // Remove prefixo de categoria se houver (fritos= ou crus=)
-        const semCategoria = seg.replace(/^(fritos|crus)=/i, '');
-        // Extrai pares: =número nome
-        const re = /(?:^|=)(\d+)\s+([^=]+)/g;
-        let m;
-        while ((m = re.exec('=' + semCategoria)) !== null) {
-            itens.push({ qty: parseInt(m[1]), nome: m[2].trim() });
+        const categoriaMatch = seg.match(/^(fritos|crus)=/i);
+        if (!categoriaMatch) return;
+        encontrouFormato = true;
+        const categoria = categoriaMatch[1].toLowerCase(); // 'fritos' ou 'crus'
+        const re4 = /(?:[^=]*=)(\d+)\s+([^=]+)/g;
+        let m4;
+        while ((m4 = re4.exec(seg)) !== null) {
+            itens.push({ qty: parseInt(m4[1]), nome: m4[2].trim(), categoria });
         }
     });
 
-    if (itens.length === 0) return null;
+    if (!encontrouFormato || itens.length === 0) return null;
 
     // Monta pedidoTexto e calcula total
     const temOferta = clienteTemOferta();
@@ -524,13 +526,25 @@ function lerItensURL() {
     let pedidoTextoCrus   = '';
     let total = 0;
 
-    itens.forEach(({ qty, nome }) => {
+    itens.forEach(({ qty, nome, categoria }) => {
         if (qty <= 0) return;
         const n = norm(nome);
+
+        // Prioriza candidatos da categoria informada (igual ao clientes.html)
+        let candidatos = products;
+        if (categoria) {
+            const porCategoria = products.filter(p => (p.categoria || '') === categoria);
+            if (porCategoria.length > 0) candidatos = porCategoria;
+        }
+
         const prod =
+            candidatos.find(p => norm(p.name) === n) ||
+            candidatos.find(p => norm(p.name).includes(n)) ||
+            candidatos.find(p => n.includes(norm(p.name))) ||
             products.find(p => norm(p.name) === n) ||
             products.find(p => norm(p.name).includes(n)) ||
             products.find(p => n.includes(norm(p.name)));
+
         if (!prod) { console.warn('[URL] Produto não encontrado:', nome); return; }
 
         const preco = (temOferta && prod.pricePromo) ? parseFloat(prod.pricePromo) : parseFloat(prod.price) || 0;
@@ -538,7 +552,7 @@ function lerItensURL() {
 
         const tipoEmoji = prod.tipo === 'quente' ? '🍗' : prod.tipo === 'fria' ? '🥐' : '✅';
         const linha = `${tipoEmoji} ${qty}x ${prod.name}`;
-        if ((prod.categoria || '').toLowerCase() === 'crus') {
+        if ((prod.categoria || '') === 'crus') {
             pedidoTextoCrus += linha + '\n';
         } else {
             pedidoTextoFritos += linha + '\n';
@@ -761,7 +775,7 @@ async function iniciarPedido() {
     try {
         const [cfgRes, prodRes] = await Promise.all([
             sb.from('configs').select('key, value').in('key', ['msg_template']),
-            sb.from('cardapio').select('*').eq('disponivel', true)
+            sb.from('cardapio').select('*').eq('available', true)
         ]);
         if (cfgRes.data) {
             const tpl = cfgRes.data.find(c => c.key === 'msg_template');
