@@ -526,6 +526,24 @@ function lerItensURL() {
     let pedidoTextoCrus   = '';
     let total = 0;
 
+    // Preços de fallback (usados quando products ainda não carregou do banco)
+    const FALLBACK_PRECOS = {
+        'fritos': {
+            'cox. frango':    2.00,
+            'cox. catupiry':  2.00,
+            'cox. charque':   2.70,
+            'r. queijo':      2.00,
+            'enroladinho':    2.00,
+        },
+        'crus': {
+            'cox. frango':    2.00,
+            'cox. catupiry':  2.00,
+            'cox. charque':   2.50,
+            'r. queijo':      2.00,
+            'salsicha':       2.00,
+        }
+    };
+
     itens.forEach(({ qty, nome, categoria }) => {
         if (qty <= 0) return;
         const n = norm(nome);
@@ -545,14 +563,31 @@ function lerItensURL() {
             products.find(p => norm(p.name).includes(n)) ||
             products.find(p => n.includes(norm(p.name)));
 
-        if (!prod) { console.warn('[URL] Produto não encontrado:', nome); return; }
+        let preco, nomeFinal, tipoEmoji;
 
-        const preco = (temOferta && prod.pricePromo) ? parseFloat(prod.pricePromo) : parseFloat(prod.price) || 0;
+        if (prod) {
+            preco     = (temOferta && prod.pricePromo) ? parseFloat(prod.pricePromo) : parseFloat(prod.price) || 0;
+            nomeFinal = prod.name;
+            tipoEmoji = prod.tipo === 'quente' ? '🍗' : prod.tipo === 'fria' ? '🥐' : '✅';
+        } else {
+            // Fallback: busca preço hardcoded pelo nome normalizado
+            const tabelaCat = FALLBACK_PRECOS[categoria] || {};
+            const tabelaGeral = { ...FALLBACK_PRECOS['fritos'], ...FALLBACK_PRECOS['crus'] };
+            const tabelaBusca = Object.keys(tabelaCat).length ? tabelaCat : tabelaGeral;
+
+            const chave = Object.keys(tabelaBusca).find(k => k === n || k.includes(n) || n.includes(k));
+            if (!chave) { console.warn('[URL] Produto não encontrado (nem no fallback):', nome); return; }
+
+            preco     = tabelaBusca[chave];
+            nomeFinal = nome; // usa o nome como veio da URL
+            tipoEmoji = '🍗';
+            console.info('[URL] Usando preço fallback para:', nome, '→ R$', preco);
+        }
+
         total += preco * qty;
 
-        const tipoEmoji = prod.tipo === 'quente' ? '🍗' : prod.tipo === 'fria' ? '🥐' : '✅';
-        const linha = `${tipoEmoji} ${qty}x ${prod.name}`;
-        if ((prod.categoria || '') === 'crus') {
+        const linha = `${tipoEmoji} ${qty}x ${nomeFinal}`;
+        if (categoria === 'crus') {
             pedidoTextoCrus += linha + '\n';
         } else {
             pedidoTextoFritos += linha + '\n';
