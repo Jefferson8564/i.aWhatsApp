@@ -609,8 +609,8 @@ let user = null;
 let _cancelarPedidoId = null;
 let _cancelarTotal = 0;
 
-// Modo: 'historico' ou 'expedidos'
-const MODO = window.location.search.includes('expedidos') ? 'expedidos' : 'historico';
+// Modo: 'historico' (sem URL params) ou 'expedidos' (qualquer param na URL)
+const MODO = window.location.search.length > 1 ? 'expedidos' : 'historico';
 
 // Dados do modo pedido
 let products = [];
@@ -1234,7 +1234,7 @@ function lerItensURL() {
         itens = [];
         const simpleHref = decodeURIComponent(window.location.href).replace(/\+/g, ' ');
         const afterQ = simpleHref.split('?')[1] || '';
-        const partes = afterQ.split('=').filter(p => p.trim() !== '' && p !== 'expedidos');
+        const partes = afterQ.split('=').filter(p => p.trim() !== '');
         partes.forEach(parte => {
             const m = parte.trim().match(/^(\d+)\s+(.+)$/);
             if (m) {
