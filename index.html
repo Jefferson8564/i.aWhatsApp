@@ -845,6 +845,7 @@ async function auth() {
         };
         localStorage.setItem('salgados_phone', phone);
         localStorage.setItem('salgados_user', JSON.stringify(user));
+        window._bcSend && window._bcSend({ type: 'LOGIN', phone: phone, user: user });
 
         btn.disabled = false;
         btn.textContent = MODO === 'expedidos' ? '🚀 Entrar e Pedir' : '🚀 Entrar';
@@ -873,14 +874,14 @@ function logout() {
     if (!confirm('Sair da conta?')) return;
     localStorage.removeItem('salgados_phone');
     localStorage.removeItem('salgados_user');
+    window._bcSend && window._bcSend({ type: 'LOGOUT' });
     user = null;
     document.getElementById('app').classList.remove('visible');
     document.getElementById('loginScreen').classList.add('visible');
 }
 
 function voltarParaInicio() {
-    const origem = window.location.origin + window.location.pathname.replace('index.html', 'cliente.html');
-    window.location.href = origem;
+    window.history.back();
 }
 
 // ===========================
@@ -1210,7 +1211,8 @@ function lerItensURL() {
 
     let itens = [];
     const fullHref = decodeURIComponent(window.location.href).replace(/\+/g, ' ');
-    const segmentos = fullHref.split('?').slice(1);
+    const afterQ = fullHref.split('?')[1] || '';
+    const segmentos = afterQ.split('&');
     let encontrouFormato = false;
 
     segmentos.forEach(seg => {
